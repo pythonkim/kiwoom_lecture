@@ -222,6 +222,7 @@ class Kiwoom(QAxWidget):
                 self.not_account_stock_dict[order_no].update({"체결량": ok_quantity})
 
                 print("미체결 종목 : %s" % self.not_account_stock_dict[order_no])
+                print("아흥")
             self.detail_account_info_event_loop.exit()
 
 
