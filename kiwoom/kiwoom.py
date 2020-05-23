@@ -17,7 +17,7 @@ class Kiwoom(QAxWidget):
         #####################eventloop 모음
         self.login_event_loop = None
         self.detail_account_info_event_loop = QEventLoop()
-        self.calculator_event_loop = QEventLoop()
+        self.calculator_event_loop = QEventLoop() #계산용을 위한 이벤트루프
         ####################################
 
         ########################스크린번호 모음
@@ -55,6 +55,8 @@ class Kiwoom(QAxWidget):
         self.read_code() #저장된 종목들 불러온다.
         self.screen_number_setting() #스크린번호를 할당
 
+        # self.calculator_fnc() #종목 분석용, 임시용으로 실행
+
         #장 시작을 알기위해
         self.dynamicCall("SetRealReg(QString,QString,QString,QString)",self.screen_start_stop_real,"",self.realType.REALTYPE['장시작시간']['장운영구분'],"0")
 
@@ -64,7 +66,7 @@ class Kiwoom(QAxWidget):
             self.dynamicCall("SetRealReg(QString,QString,QString,QString)", screen_num, code,fids, "1")
             print("실시간 등록 코드 : %s,스크린번호 : %s,  번호 : %s" % (code, screen_num,  fids))
 
-        #self.calculator_fnc() #종목 분석용, 임시용으로 실행
+
 
 
 
@@ -77,7 +79,7 @@ class Kiwoom(QAxWidget):
         self.OnReceiveMsg.connect(self.msg_slot) # 이건 시그널이 없다 모든것이 시그널이 된다
 
     def real_event_slots(self):
-        self.OnReceiveRealData.connect(self.realdata_slot)
+        self.OnReceiveRealData.connect(self.realdata_slot) #실시간 정보받는 이벤트
         self.OnReceiveChejanData.connect(self.chejan_slot) #주문에 대한 이벤트
 
 
@@ -303,6 +305,7 @@ class Kiwoom(QAxWidget):
             if sPrevNext == "2":
                 self.day_kiwoom_db(code=code,sPrevNext=sPrevNext)
             else:
+                #하나의 종목 데이터를 다 받아왔다면? 이제 조건으로 검색하여 넣는것이다.(조건식을 만드는부분)
                 print("sPrevNext가 2가 아니여, 즉 다음페이지가 없어")
                 print("총일수 %s" % len(self.calcul_data))
 
@@ -397,15 +400,17 @@ class Kiwoom(QAxWidget):
         print("코스닥 갯수 %s" % len(code_list))
 
         for idx, code in enumerate(code_list): #인덱스와 데이터를 같이 주기 위해 enumerate
-            self.dynamicCall("DisconnectRealData(QString)",self.screen_calculation_stock) #화면번호 설정한 시시간 데이터를 해지한다.
+            self.dynamicCall("DisconnectRealData(QString)",self.screen_calculation_stock) #화면번호 설정한 데이터를 해지한다.
+            # #스크린번호를 한번이라도 요청하면 그룹이 만들어진다. 그래서 끊어주는 것이다. 덮어쓰기 될것 같은데 안전하게 가기위함
+
 
             print("%s / %s : KOSDAQ Stock Code : %s is updating..." %(idx+1, len(code_list),code))
             self.day_kiwoom_db(code=code)
 
-
+    #일봉 차트가져오기
     def day_kiwoom_db(self, code=None, date=None, sPrevNext="0"):
 
-        QTest.qWait(3600)
+        QTest.qWait(3600)#연속으로 가져오면 키움에서 끊어버리기 때문에 3.6초 딜레이름 준다
 
         self.dynamicCall('SetInputValue(QString,QString)', '종목코드', code)
         self.dynamicCall('SetInputValue(QString,QString)', '수정주가구분', '1')
@@ -419,8 +424,8 @@ class Kiwoom(QAxWidget):
     #매수법칙 계산 들어가면 됨
 
     def read_code(self):
-        if os.path.exists("files/condition_stock.txt"): #파일이 있냐?
-            f = open("files/condition_stock.txt","r",encoding="utf8")
+        if os.path.exists("files/condition_stock.txt"): #exists파일이 있냐?
+            f = open("files/condition_stock.txt","r",encoding="utf8") #있으면 불러와 읽어라
 
             lines = f.readlines()
             for line in lines:
@@ -438,6 +443,7 @@ class Kiwoom(QAxWidget):
             f.close()
             print(self.portfolio_stock_dict)
 
+    #흩어져 있는 종목이 겹치면 합쳐서 스크린번호를 부여
     def screen_number_setting(self):
         screen_overwrite = []
 
@@ -450,7 +456,7 @@ class Kiwoom(QAxWidget):
         for order_number in self.not_account_stock_dict.keys():
             code = self.not_account_stock_dict[order_number]['종목코드']
 
-            if code not in  screen_overwrite:
+            if code not in screen_overwrite:
                 screen_overwrite.append(code)
 
         #포트폴리오에 담겨있는 종목들
@@ -497,7 +503,7 @@ class Kiwoom(QAxWidget):
             elif value == "4":
                 print("3시30분 장 종료")
                 for code in self.portfolio_stock_dict.keys():
-                    self.dynamicCall("SetRealRemove(QString, QString)",self.portfolio_stock_dict[code]['스크린번호'])
+                    self.dynamicCall("SetRealRemove(QString, QString)",self.portfolio_stock_dict[code]['스크린번호'],code)
 
                 QTest.qWait(5000)
                 self.file_delete()
@@ -556,6 +562,7 @@ class Kiwoom(QAxWidget):
             self.portfolio_stock_dict[sCode].update({"거래비용": l})
 
             print(self.portfolio_stock_dict[sCode])
+
             # 계좌잔고평가내역에 있고 오늘 산 잔고에는 없을 경우
             if sCode in self.account_stock_dict.keys() and sCode not in self.jango_dict.keys():
                 #print("%s %s" % ("신규매도를 한다",sCode))
@@ -614,6 +621,7 @@ class Kiwoom(QAxWidget):
 
 
             not_meme_list = list(self.not_account_stock_dict) #딕셔너리를 리스트로 감싸면 변수가 변해도 딕셔너리는 변하지 않는다. copy와 같음!
+
             for order_num in not_meme_list:
                 code = self.not_account_stock_dict[order_num]["종목코드"]
                 meme_price = self.not_account_stock_dict[order_num]['주문가격']
@@ -632,6 +640,7 @@ class Kiwoom(QAxWidget):
                     else:
                         self.logging.logger.debug("매수취소 전달 실패")
 
+                #미체결에 아무것도 없다면 not_account_stock_dict 딕셔너리를 다 지워준다.
                 elif not_quantity == 0:
                     del self.not_account_stock_dict[order_num]
 
@@ -759,12 +768,13 @@ class Kiwoom(QAxWidget):
 
     #송수신 메시지 get
     def msg_slot(self, sScrNo, sRQName, sTrCode, msg):
-        print("스크린 : %s, 요청이름 : %s, tr코드: %s ---- %s" %(sScrNo,sRQName,sTrCode,msg))
+        print("스크린 : %s, 요청이름 : %s, tr코드: %s ---- %s" % (sScrNo,sRQName,sTrCode,msg))
 
     #파일 삭제
     def file_delete(self):
-        if os.path.isfile("files/condition_stock.txt"):
-            os.remove("files/condition_stock.txt")
+        if os.path.isfile("files/condition_stock.txt"): #파일이 있으면?
+            pass
+            #os.remove("files/condition_stock.txt")
 
 
 
